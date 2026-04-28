@@ -1,0 +1,707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Beyond Standard LLMs 02 &mdash; Text Diffusion Models</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0a0a0a; --bg-card: #0d1117; --bg-code: #161b22;
+            --text-primary: #e6edf3; --text-secondary: #8b949e;
+            --accent: #76B900; --accent-dim: #76B90044; --accent-glow: #76B90033;
+            --warm: #ffa657; --warm-dim: rgba(255,166,87,0.15);
+            --bad: #ff7b72;
+            --border: #21262d;
+            --font-display: 'Space Grotesk', sans-serif;
+            --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+            --font-body: 'Inter', sans-serif;
+            --max-width: 900px;
+        }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; }
+        body { background: var(--bg-primary); color: var(--text-primary);
+               font-family: var(--font-body); font-size: 17px; line-height: 1.7;
+               overflow-x: hidden; }
+        .hero { min-height: 100vh; display: flex; flex-direction: column;
+                justify-content: center; align-items: center;
+                padding: 2rem 1.5rem; text-align: center; position: relative; }
+        .hero::before { content: ''; position: absolute; top: 0; left: 50%;
+                        transform: translateX(-50%); width: 600px; height: 600px;
+                        background: radial-gradient(circle, var(--accent-glow) 0%, transparent 70%);
+                        pointer-events: none; z-index: 0; }
+        .hero > * { position: relative; z-index: 1; }
+        .series-label { font-family: var(--font-mono); font-size: 0.85rem;
+                        color: var(--accent); letter-spacing: 0.15em;
+                        text-transform: uppercase; margin-bottom: 1rem; }
+        .hero h1 { font-family: var(--font-display);
+                   font-size: clamp(2rem, 5vw, 3.2rem); font-weight: 700;
+                   color: var(--text-primary); line-height: 1.2; margin-bottom: 1rem; }
+        .hero h1 .accent { color: var(--accent); }
+        .hero .subtitle { font-size: 1.1rem; color: var(--text-secondary);
+                          max-width: 720px; margin-bottom: 2rem; }
+        .tags { display: flex; flex-wrap: wrap; gap: 0.5rem;
+                justify-content: center; margin-bottom: 2.5rem; }
+        .tag { font-family: var(--font-mono); font-size: 0.75rem;
+               padding: 0.25rem 0.75rem; border-radius: 999px;
+               border: 1px solid var(--accent); color: var(--accent);
+               background: var(--accent-dim); white-space: nowrap; }
+        .pipeline { display: flex; flex-wrap: wrap; align-items: center;
+                    justify-content: center; gap: 0.25rem; margin-bottom: 1rem;
+                    max-width: var(--max-width); }
+        .pipeline-step { font-family: var(--font-mono); font-size: 0.7rem;
+                         padding: 0.3rem 0.7rem; background: var(--bg-card);
+                         border: 1px solid var(--border); border-radius: 4px;
+                         color: var(--text-secondary); white-space: nowrap; }
+        .pipeline-arrow { color: var(--accent); font-size: 0.9rem; font-weight: 700; }
+        .slide { min-height: 100vh; max-width: var(--max-width);
+                 margin: 0 auto; padding: 4rem 1.5rem; position: relative;
+                 display: flex; flex-direction: column; justify-content: center; }
+        .slide-number { font-family: var(--font-display); font-size: 5rem;
+                        font-weight: 700; color: var(--accent-dim);
+                        position: absolute; top: 2rem; right: 1.5rem;
+                        line-height: 1; user-select: none; }
+        .slide h2 { font-family: var(--font-display); font-size: 1.9rem;
+                    font-weight: 700; color: var(--accent); margin-bottom: 1.5rem;
+                    line-height: 1.25; }
+        .slide h3 { font-family: var(--font-display); font-size: 1.3rem;
+                    font-weight: 600; color: var(--text-primary);
+                    margin-top: 1.5rem; margin-bottom: 0.75rem; }
+        .slide p { margin-bottom: 1rem; color: var(--text-secondary); }
+        .slide p strong { color: var(--text-primary); }
+        .slide ul, .slide ol { margin-bottom: 1rem; padding-left: 1.5rem;
+                               color: var(--text-secondary); }
+        .slide li { margin-bottom: 0.4rem; }
+        .slide li strong { color: var(--text-primary); }
+        .slide code { font-family: var(--font-mono); font-size: 0.88em;
+                      background: var(--bg-code); border: 1px solid var(--border);
+                      padding: 0.05rem 0.35rem; border-radius: 3px; color: #c9d1d9; }
+        .table-wrap { overflow-x: auto; margin: 1.25rem 0; border-radius: 8px;
+                      border: 1px solid var(--border); }
+        table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+        th { background: var(--bg-code); color: var(--accent); font-weight: 600;
+             text-align: left; padding: 0.75rem 1rem; border-bottom: 1px solid var(--border);
+             font-family: var(--font-display); white-space: nowrap; }
+        td { padding: 0.6rem 1rem; border-bottom: 1px solid var(--border);
+             color: var(--text-secondary); }
+        tr:last-child td { border-bottom: none; }
+        tr:nth-child(even) td { background: rgba(13, 17, 23, 0.5); }
+        .diagram-grid { display: grid; gap: 0.75rem; margin: 1.5rem 0;
+                        padding: 1.5rem; background: var(--bg-card);
+                        border: 1px solid var(--border); border-radius: 8px; }
+        .diagram-grid.cols-2 { grid-template-columns: 1fr 1fr; }
+        .diagram-grid.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+        .diagram-panel { padding: 1rem; background: var(--bg-code);
+                         border: 1px solid var(--border); border-radius: 6px; }
+        .diagram-panel.accent-border { border-left: 3px solid var(--accent); }
+        .diagram-panel h4 { font-family: var(--font-display); font-size: 1rem;
+                            color: var(--accent); margin-bottom: 0.5rem; }
+        .diagram-panel p, .diagram-panel ul { font-size: 0.85rem; }
+        .callout { background: var(--bg-card); border-left: 3px solid var(--accent);
+                   border-radius: 0 8px 8px 0; padding: 1rem 1.25rem; margin: 1.25rem 0; }
+        .callout p { margin-bottom: 0; }
+        .callout p + p { margin-top: 0.5rem; }
+        .callout .callout-label { font-family: var(--font-mono); font-size: 0.75rem;
+                                  color: var(--accent); text-transform: uppercase;
+                                  letter-spacing: 0.1em; margin-bottom: 0.3rem; }
+        .callout.warn { border-left-color: var(--warm); }
+        .callout.warn .callout-label { color: var(--warm); }
+        .contents-list { list-style: none; padding-left: 0; counter-reset: contents; }
+        .contents-list li { counter-increment: contents; padding: 0.6rem 0;
+                            border-bottom: 1px solid var(--border);
+                            display: flex; align-items: center; gap: 1rem; }
+        .contents-list li:last-child { border-bottom: none; }
+        .contents-list li::before { content: counter(contents, decimal-leading-zero);
+                                    font-family: var(--font-mono); font-size: 0.85rem;
+                                    color: var(--accent); min-width: 2rem; }
+        .contents-list a { color: var(--text-primary); text-decoration: none;
+                           transition: color 0.2s; }
+        .contents-list a:hover { color: var(--accent); }
+        .footer { text-align: center; padding: 3rem 1.5rem;
+                  color: var(--text-secondary); font-size: 0.85rem;
+                  border-top: 1px solid var(--border); max-width: var(--max-width);
+                  margin: 0 auto; }
+        .footer a { color: var(--accent); text-decoration: none; }
+        .footer a:hover { text-decoration: underline; }
+        .canvas-wrap { background: var(--bg-card); border: 1px solid var(--border);
+                       border-radius: 8px; padding: 1rem; margin: 1.25rem 0;
+                       overflow-x: auto; }
+        .deck-list { display: flex; flex-direction: column; gap: 0.6rem;
+                     list-style: none; padding: 0; }
+        .deck-card { display: flex; gap: 1rem; padding: 1rem 1.25rem;
+                     background: var(--bg-card); border: 1px solid var(--border);
+                     border-left: 3px solid var(--accent); border-radius: 6px; }
+        .deck-card .num { font-family: var(--font-mono); font-size: 0.8rem;
+                          color: var(--accent); min-width: 2rem; padding-top: 0.15rem; }
+        .deck-card .body { flex: 1; min-width: 0; }
+        .deck-card .deck-title { font-family: var(--font-display); font-size: 1.05rem;
+                                 font-weight: 600; color: var(--text-primary);
+                                 margin-bottom: 0.2rem; }
+        .deck-card a.deck-title { text-decoration: none; }
+        .deck-card a.deck-title:hover { color: var(--accent); }
+        .deck-card .desc { font-size: 0.92rem; color: var(--text-secondary); }
+        .ref-link { display: inline-block; padding: 0.4rem 0.8rem;
+                    border: 1px solid var(--accent); color: var(--accent);
+                    border-radius: 4px; text-decoration: none;
+                    font-family: var(--font-mono); font-size: 0.8rem;
+                    transition: background 0.15s; }
+        .ref-link:hover { background: var(--accent-dim); }
+
+        /* Token visualiser widget */
+        .vis-card { background: var(--bg-card); border: 1px solid var(--border);
+                    border-left: 3px solid var(--accent); border-radius: 8px;
+                    padding: 1.25rem; margin: 1.25rem 0; }
+        .vis-controls { display: flex; flex-wrap: wrap; gap: 0.6rem; margin-bottom: 1rem; align-items: center; }
+        .vis-btn { font-family: var(--font-mono); font-size: 0.8rem;
+                   padding: 0.4rem 0.9rem; background: var(--bg-code);
+                   border: 1px solid var(--accent); color: var(--accent);
+                   border-radius: 4px; cursor: pointer; transition: background 0.15s; }
+        .vis-btn:hover { background: var(--accent-dim); }
+        .vis-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+        .vis-status { font-family: var(--font-mono); font-size: 0.75rem; color: var(--text-secondary); margin-left: auto; }
+        .vis-track { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+        .vis-panel { background: var(--bg-code); border: 1px solid var(--border);
+                     border-radius: 6px; padding: 0.9rem; }
+        .vis-panel h5 { font-family: var(--font-display); font-size: 0.95rem;
+                        color: var(--accent); margin-bottom: 0.4rem; }
+        .vis-panel .meta { font-family: var(--font-mono); font-size: 0.7rem;
+                           color: var(--text-secondary); margin-bottom: 0.6rem; }
+        .vis-tokens { display: flex; flex-wrap: wrap; gap: 0.25rem; min-height: 4rem;
+                      font-family: var(--font-mono); font-size: 0.78rem; }
+        .vis-tok { padding: 0.15rem 0.45rem; border-radius: 3px;
+                   background: var(--bg-card); border: 1px solid var(--border);
+                   color: var(--text-secondary); transition: background 0.2s, border-color 0.2s, color 0.2s; }
+        .vis-tok.mask { color: var(--warm); border-color: var(--warm); background: var(--warm-dim); }
+        .vis-tok.fresh { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+        .vis-tok.set { color: var(--text-primary); border-color: var(--border); }
+        .vis-counter { display: flex; gap: 1rem; margin-top: 0.7rem;
+                       font-family: var(--font-mono); font-size: 0.78rem; color: var(--text-secondary); }
+        .vis-counter b { color: var(--accent); font-weight: 700; }
+
+        @media (max-width: 640px) {
+            .slide { padding: 3rem 1rem; min-height: auto; }
+            .slide-number { font-size: 3rem; top: 1.5rem; right: 1rem; }
+            .slide h2 { font-size: 1.5rem; }
+            .diagram-grid.cols-2, .diagram-grid.cols-3 { grid-template-columns: 1fr; }
+            .vis-track { grid-template-columns: 1fr; }
+            .pipeline { gap: 0.15rem; }
+            .pipeline-step { font-size: 0.6rem; padding: 0.2rem 0.4rem; }
+            .hero h1 { font-size: 1.8rem; }
+            table { font-size: 0.78rem; }
+        }
+    </style>
+</head>
+<body>
+<header class="hero">
+    <div class="series-label">Beyond Standard LLMs &mdash; Companion to Sebastian Raschka &mdash; Presentation 02</div>
+    <h1>Text <span class="accent">Diffusion Models</span></h1>
+    <p class="subtitle">Generate every token at once and refine, instead of left-to-right one at a time. LLaDA, Gemini Diffusion, and the question of whether parallel decoding can survive contact with reasoning, streaming, and tool use.</p>
+    <div class="tags">
+        <span class="tag">Companion</span>
+        <span class="tag">Sebastian Raschka</span>
+        <span class="tag">Diffusion LM</span>
+        <span class="tag">LLaDA</span>
+        <span class="tag">Gemini Diffusion</span>
+        <span class="tag">ParallelBench</span>
+    </div>
+    <div class="pipeline">
+        <span class="pipeline-step">All [MASK]</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Denoise step 1</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Denoise step 2</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">&hellip;</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Denoise step K</span>
+        <span class="pipeline-arrow">&rarr;</span>
+        <span class="pipeline-step">Final text</span>
+    </div>
+    <p style="margin-top: 1.5rem; font-size: 0.9rem;"><a class="ref-link" href="https://magazine.sebastianraschka.com/p/beyond-standard-llms" target="_blank" rel="noopener">Read the original article &rarr;</a></p>
+</header>
+
+<section class="slide" id="slide-00">
+    <div class="slide-number">00</div>
+    <h2>Topics We&rsquo;ll Cover</h2>
+    <ul class="contents-list">
+        <li><a href="#slide-01">From Next-Token to Denoising &mdash; The Paradigm Shift</a></li>
+        <li><a href="#slide-02">How a Diffusion Language Model Generates Text</a></li>
+        <li><a href="#slide-03">LLaDA &mdash; The First Credible 8B Diffusion LM</a></li>
+        <li><a href="#slide-04">Gemini Diffusion &mdash; Google&rsquo;s Production Bet</a></li>
+        <li><a href="#slide-05">Where the Wins Come From &mdash; And Where They Don&rsquo;t</a></li>
+        <li><a href="#slide-06">Interactive: Diffusion vs Autoregressive Visualiser</a></li>
+        <li><a href="#slide-07">The Hard Limits &mdash; Streaming, Conditional Dependency, Tool Use</a></li>
+        <li><a href="#slide-08">Companion Decks &mdash; Where to Go Next</a></li>
+        <li><a href="#slide-09">Things to Try Yourself</a></li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">Where this deck sits in the series</div>
+        <p>Deck 01 covered linear-attention hybrids &mdash; an efficiency play <em>within</em> the autoregressive paradigm. This deck takes a sharper turn: <strong>text diffusion abandons next-token prediction entirely</strong>. The wins are real but the trade-offs are unfamiliar &mdash; especially for engineers who have internalised the autoregressive mental model.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-01">
+    <div class="slide-number">01</div>
+    <h2>From Next-Token to Denoising &mdash; The Paradigm Shift</h2>
+    <p>Standard LLMs are autoregressive: produce token <em>t</em>, then condition on it to produce <em>t+1</em>. The whole stack &mdash; KV cache, streaming UX, tool-call protocols, RLHF reward shaping &mdash; was designed around this loop. Diffusion language models break the loop on purpose.</p>
+
+    <p>From the article, Raschka frames it cleanly: <em>&ldquo;Diffusion LLMs generate multiple tokens in parallel rather than sequentially&rdquo;</em>, through iterative denoising steps rather than next-token prediction. The mental model is closer to image diffusion or to BERT&rsquo;s masked language modelling than to GPT.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Autoregressive (GPT-style)</h4>
+            <ul>
+                <li>One forward pass per token.</li>
+                <li>2&nbsp;000 tokens of output = 2&nbsp;000 sequential passes.</li>
+                <li>Causal mask: each token sees only what came before.</li>
+                <li>Streaming &ldquo;just works&rdquo; &mdash; emit each token as it&rsquo;s produced.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Diffusion (LLaDA-style)</h4>
+            <ul>
+                <li>Start with all positions masked; output length is fixed up front.</li>
+                <li>K denoising steps, each fills in some masked positions in parallel.</li>
+                <li>Bidirectional attention: every position sees every other.</li>
+                <li>No streaming: the answer only exists after the last step.</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">Raschka&rsquo;s comparison, in numbers</div>
+        <p>&ldquo;Even if a diffusion model needs 64 denoising steps to produce all tokens in parallel at each step, this is still computationally more efficient than performing 2&nbsp;000 sequential generation steps.&rdquo; The 64 vs 2&nbsp;000 framing is the central marketing claim &mdash; and it is true to first order. The interesting questions are about everything else: latency to first useful output, accuracy on multi-step reasoning, and compatibility with the agent protocols the rest of the ecosystem has standardised on.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-02">
+    <div class="slide-number">02</div>
+    <h2>How a Diffusion Language Model Generates Text</h2>
+    <p>A diffusion LM trains by progressively masking text and learning to recover it. At inference time, the same forward direction is run: start with a target-length sequence of <code>[MASK]</code> tokens, then iteratively un-mask.</p>
+
+    <div class="canvas-wrap">
+        <svg viewBox="0 0 720 240" width="720" height="240" xmlns="http://www.w3.org/2000/svg">
+            <style>
+                .step { fill: #0d1117; stroke: #21262d; }
+                .stepa { fill: #0d1117; stroke: #76B900; }
+                .ttl2 { fill: #76B900; font-family: 'Space Grotesk', sans-serif; font-size: 12px; font-weight: 700; }
+                .lbl2 { fill: #e6edf3; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+                .mk { fill: #ffa657; font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+                .arr { stroke: #76B900; stroke-width: 1.7; fill: none; marker-end: url(#a4); }
+            </style>
+            <defs>
+                <marker id="a4" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+                    <path d="M 0 0 L 10 5 L 0 10 z" fill="#76B900"/>
+                </marker>
+            </defs>
+            <rect class="step" x="20" y="30" width="140" height="180" rx="6"/>
+            <text class="ttl2" x="90" y="50" text-anchor="middle">step 0</text>
+            <text class="mk"  x="90" y="80" text-anchor="middle">[M] [M] [M] [M]</text>
+            <text class="mk"  x="90" y="100" text-anchor="middle">[M] [M] [M] [M]</text>
+            <text class="mk"  x="90" y="120" text-anchor="middle">[M] [M] [M] [M]</text>
+            <text class="mk"  x="90" y="140" text-anchor="middle">[M] [M] [M] [M]</text>
+            <text class="lbl2" x="90" y="180" text-anchor="middle">all positions masked</text>
+            <text class="lbl2" x="90" y="196" text-anchor="middle">length is fixed</text>
+
+            <rect class="step" x="200" y="30" width="140" height="180" rx="6"/>
+            <text class="ttl2" x="270" y="50" text-anchor="middle">step k</text>
+            <text class="lbl2" x="270" y="80" text-anchor="middle">The [M] is [M]</text>
+            <text class="lbl2" x="270" y="100" text-anchor="middle">[M] cat sat [M]</text>
+            <text class="lbl2" x="270" y="120" text-anchor="middle">on the [M] [M]</text>
+            <text class="lbl2" x="270" y="140" text-anchor="middle">[M] [M] [M] [M]</text>
+            <text class="lbl2" x="270" y="180" text-anchor="middle">most-confident</text>
+            <text class="lbl2" x="270" y="196" text-anchor="middle">positions filled</text>
+
+            <rect class="stepa" x="380" y="30" width="140" height="180" rx="6"/>
+            <text class="ttl2" x="450" y="50" text-anchor="middle">step K-1</text>
+            <text class="lbl2" x="450" y="80" text-anchor="middle">The fat cat sat</text>
+            <text class="lbl2" x="450" y="100" text-anchor="middle">[M] the mat and</text>
+            <text class="lbl2" x="450" y="120" text-anchor="middle">looked at me</text>
+            <text class="lbl2" x="450" y="140" text-anchor="middle">[M]</text>
+            <text class="lbl2" x="450" y="180" text-anchor="middle">few tokens left</text>
+
+            <rect class="stepa" x="560" y="30" width="140" height="180" rx="6"/>
+            <text class="ttl2" x="630" y="50" text-anchor="middle">step K (done)</text>
+            <text class="lbl2" x="630" y="80" text-anchor="middle">The fat cat sat</text>
+            <text class="lbl2" x="630" y="100" text-anchor="middle">on the mat and</text>
+            <text class="lbl2" x="630" y="120" text-anchor="middle">looked at me</text>
+            <text class="lbl2" x="630" y="140" text-anchor="middle">.</text>
+            <text class="lbl2" x="630" y="180" text-anchor="middle">all positions set</text>
+
+            <line class="arr" x1="160" y1="120" x2="200" y2="120"/>
+            <line class="arr" x1="340" y1="120" x2="380" y2="120"/>
+            <line class="arr" x1="520" y1="120" x2="560" y2="120"/>
+        </svg>
+    </div>
+
+    <h3>The training procedure</h3>
+    <ol>
+        <li>Sample text. Sample a random masking ratio <code>r &in; (0,1)</code>.</li>
+        <li>Replace each token independently with <code>[MASK]</code> with probability <code>r</code>.</li>
+        <li>Run the model with <strong>bidirectional</strong> attention &mdash; not the causal mask used for autoregressive training.</li>
+        <li>Train the model to predict the original tokens at the masked positions, weighted by <code>1/r</code> so the loss is well-calibrated across mask ratios.</li>
+    </ol>
+
+    <h3>The inference procedure</h3>
+    <ol>
+        <li>Start with all positions masked. Run the model. Each position outputs a distribution over the vocabulary.</li>
+        <li><strong>Commit the most-confident k positions</strong> &mdash; un-mask those tokens. Leave the rest masked.</li>
+        <li>Run the model again. With more committed context, the next round&rsquo;s predictions are sharper.</li>
+        <li>Repeat until all positions are set, or until a fixed step budget is exhausted.</li>
+    </ol>
+
+    <div class="callout">
+        <div class="callout-label">Why this is more than a re-skin of BERT</div>
+        <p>Raschka makes the connection explicit: diffusion LMs are <em>&ldquo;analogous to BERT&rsquo;s masked language modelling, extended probabilistically&rdquo;</em>. The extension matters &mdash; rather than predicting one masked position with the rest of the sentence intact, the model learns to recover from <em>any</em> mask ratio, giving it the iterative-refinement behaviour. BERT learned the easy version; diffusion LMs learn the hard version.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-03">
+    <div class="slide-number">03</div>
+    <h2>LLaDA &mdash; The First Credible 8B Diffusion LM</h2>
+    <p>LLaDA (Large Language Diffusion with mAsking) is the cleanest open-weights diffusion language model to date. It is what makes the &ldquo;is this approach actually viable?&rdquo; question concrete instead of theoretical.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>What it actually is</h4>
+            <ul>
+                <li>8B parameter dense decoder.</li>
+                <li>Built on the <strong>Llama 3 architecture</strong> with the causal mask removed and the prediction head retargeted at masked positions.</li>
+                <li>Standard SFT and RLHF on top of the diffusion-trained base.</li>
+                <li>Released as both base and instruct variants.</li>
+            </ul>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>What it shows</h4>
+            <ul>
+                <li>You can lift Llama-3-tier capability into the diffusion regime <em>without</em> rewriting the architecture from scratch.</li>
+                <li>Standard benchmarks (MMLU, GSM8K) come within striking distance of comparable autoregressive 8B models.</li>
+                <li>The instruction-tuning recipe transfers; the model takes RLHF.</li>
+                <li>Inference can be run with 16&ndash;64 denoising steps on a generation up to 1&nbsp;024 tokens.</li>
+            </ul>
+        </div>
+    </div>
+
+    <h3>The architectural punchline</h3>
+    <p>The same neural-network skeleton serves both paradigms. The difference is <em>what you train it to do</em> and <em>how you decode</em>: causal-mask + next-token-loss + greedy/sample = autoregressive; no-mask + masked-LM-loss + iterative-refinement = diffusion. The cost of switching is in the training pipeline, not the model card.</p>
+
+    <div class="callout">
+        <div class="callout-label">A useful comparison point</div>
+        <p>If LLaDA-Instruct can hold its own at 8B, the question becomes: what would a <em>frontier-scale</em> diffusion LM look like? Does the &ldquo;parallel decoding&rdquo; advantage compound with scale, or does autoregressive training pull ahead at 70B+ where the data and compute budget is more efficiently spent on standard methods? At time of writing, no one has run the experiment in public.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-04">
+    <div class="slide-number">04</div>
+    <h2>Gemini Diffusion &mdash; Google&rsquo;s Production Bet</h2>
+    <p>Google announced <strong>Gemini Diffusion</strong> as a production diffusion LM &mdash; the first time a frontier lab has put diffusion text generation on a serving roadmap rather than treating it as a research demo. The interesting numbers are not on accuracy, but on speed.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>The headline claim</h4>
+            <p>Maintains <strong>parity</strong> with Gemini 2.0 Flash-Lite on standard benchmarks while being <strong>faster to generate</strong>. Google is positioning it for low-latency on-device and mobile use cases &mdash; the same niche Flash-Lite occupies, but with the parallel-decoding throughput advantage.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>What is conspicuously absent</h4>
+            <p>No reasoning-mode variant. No tool-calling story. No streaming UX. No public release of weights. The deployment scope is narrow and explicit: generate a complete answer, fast. The model is a <em>replacement candidate for distilled small autoregressive models</em>, not for the flagship.</p>
+        </div>
+    </div>
+
+    <h3>Why this is interesting even if you don&rsquo;t deploy Gemini</h3>
+    <ul>
+        <li>It is the first production-scale validation that a diffusion LM can match a tuned distillation pipeline. The cottage-industry of distilled small models now has a credible competitor architecture.</li>
+        <li>The <em>scope</em> of the deployment tells you where Google&rsquo;s engineers think the approach is mature: short-output, low-latency, single-turn. That maps cleanly to the article&rsquo;s recommendation.</li>
+        <li>If a frontier lab can&rsquo;t (yet) ship diffusion in their reasoning model or their agentic loop, that is a load-bearing data point for the limitations on the next slide.</li>
+    </ul>
+
+    <div class="callout">
+        <div class="callout-label">A pattern worth watching</div>
+        <p>Both major announcements in this family &mdash; LLaDA and Gemini Diffusion &mdash; sit at <strong>8B-class capability</strong>. None of the published systems is a frontier-scale reasoning model. The small-model niche is where diffusion lives in 2026. Whether that&rsquo;s a permanent ceiling or just the current capability frontier is the question.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-05">
+    <div class="slide-number">05</div>
+    <h2>Where the Wins Come From &mdash; And Where They Don&rsquo;t</h2>
+    <p>The diffusion approach delivers two distinct kinds of gain. They are easy to confuse, and treating them as the same thing leads to confused expectations.</p>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Win 1 &mdash; throughput</h4>
+            <p>16&ndash;64 forward passes vs 2&nbsp;000 forward passes for an equivalent-length output. On hardware where batch parallelism is cheap and sequential dependencies are expensive, that is a 30&ndash;100&times; reduction in serial steps. The wall-clock latency advantage is real and measured.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Win 2 &mdash; bidirectional context</h4>
+            <p>Each token sees the entire output, not just what came before. For tasks where late tokens disambiguate early ones (constraint-satisfaction, structured output), that is a non-trivial inductive bias. The model can &ldquo;plan ahead&rdquo; in a way GPT cannot.</p>
+        </div>
+    </div>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>Loss 1 &mdash; no streaming</h4>
+            <p>The answer doesn&rsquo;t exist token-by-token; it materialises in the last denoising step. For chat UX, this kills the &ldquo;tokens trickle in&rdquo; experience users have come to expect. For agent loops where the next action depends on a prefix of the output, it is a hard architectural mismatch.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Loss 2 &mdash; conditional dependency</h4>
+            <p>From the article: when generating the phrase &ldquo;New York&rdquo;, the autoregressive model can commit to &ldquo;New&rdquo; first and then strongly prefer &ldquo;York&rdquo;. The diffusion model has to sample the two positions <em>jointly</em> in one forward pass, and may end up with &ldquo;New City&rdquo; or &ldquo;Newport York&rdquo;. This is the central failure mode.</p>
+        </div>
+    </div>
+
+    <h3>What ParallelBench measured</h3>
+    <p>The ParallelBench paper, cited by Raschka, isolates exactly this failure: <em>&ldquo;current parallel decoding strategies struggle to adapt their degree of parallelism based on task difficulty&rdquo;</em>. The model commits too many tokens too early on hard tasks, then can&rsquo;t recover. Adaptive parallelism &mdash; deciding per-step how many tokens to commit &mdash; is an open research problem.</p>
+
+    <div class="callout">
+        <div class="callout-label">A helpful framing</div>
+        <p>Diffusion LMs are great when the joint distribution over the output is mostly captured by surface-level fluency. They struggle when there is a strong sequential dependency that a left-to-right pass would handle automatically. Knowing which side of that line your task sits on tells you most of what you need to know.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-06">
+    <div class="slide-number">06</div>
+    <h2>Interactive: Diffusion vs Autoregressive Visualiser</h2>
+    <p>Run both decoding strategies side by side on a fixed target sentence. The autoregressive model fills tokens one at a time; the diffusion model fills the most-confident few per step in parallel. Watch the trade-off: more total forward passes vs more sequential dependencies.</p>
+
+    <div class="vis-card">
+        <div class="vis-controls">
+            <button class="vis-btn" id="vis-step">Step</button>
+            <button class="vis-btn" id="vis-run">Run all</button>
+            <button class="vis-btn" id="vis-reset">Reset</button>
+            <span class="vis-status" id="vis-status">ready</span>
+        </div>
+        <div class="vis-track">
+            <div class="vis-panel">
+                <h5>Autoregressive (GPT-style)</h5>
+                <div class="meta">one token per forward pass &middot; left-to-right</div>
+                <div class="vis-tokens" id="ar-tokens"></div>
+                <div class="vis-counter">forward passes: <b id="ar-passes">0</b> &middot; tokens set: <b id="ar-set">0</b></div>
+            </div>
+            <div class="vis-panel">
+                <h5>Diffusion (LLaDA-style)</h5>
+                <div class="meta">commit top-k confident positions per step &middot; bidirectional</div>
+                <div class="vis-tokens" id="df-tokens"></div>
+                <div class="vis-counter">denoising steps: <b id="df-passes">0</b> &middot; tokens set: <b id="df-set">0</b></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">What to notice</div>
+        <p>Both finish in the same number of slides &mdash; but watch the <em>forward pass</em> counters. The autoregressive side ticks up to the full token count; the diffusion side stops well before. That ratio is the throughput win. Now look at the <em>order</em> the diffusion side fills tokens in &mdash; not strictly left-to-right, often the &ldquo;easy&rdquo; tokens (punctuation, common words) first. That is the bidirectional view at work.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-07">
+    <div class="slide-number">07</div>
+    <h2>The Hard Limits &mdash; Streaming, Conditional Dependency, Tool Use</h2>
+    <p>Three load-bearing limitations that the article surfaces, none of them solved as of early 2026:</p>
+
+    <div class="diagram-grid cols-3">
+        <div class="diagram-panel accent-border">
+            <h4>No streaming</h4>
+            <p>The output exists only after the last denoising step. Chat UI expectations break. Agent loops that condition on partial output (early-exit, interrupt) cannot be retrofitted &mdash; the architecture doesn&rsquo;t produce a partial output.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Conditional dependency</h4>
+            <p>&ldquo;New York&rdquo; vs &ldquo;New City&rdquo;. Long-range factual chains (&ldquo;Alice gave Bob the key, then Bob unlocked the door&rdquo;) where committing the wrong noun early creates inconsistencies the rest of the sequence can&rsquo;t fix in the remaining denoising budget.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Tool-call compatibility unclear</h4>
+            <p>Tool calls are structured chunks with strict syntax. Are they emitted in one denoising pass? Across many? What happens if the JSON is half-committed and then the rest can&rsquo;t close it? No production diffusion LM has shipped tool use yet.</p>
+        </div>
+    </div>
+
+    <h3>Reasoning: the harder open question</h3>
+    <p>Chain-of-thought, RLHF&rsquo;d reasoning, the o1/R1 paradigm &mdash; all of these rely on the model emitting long sequential reasoning chains where each step depends on the previous one. That is the worst case for diffusion: maximum conditional dependency, maximum sequence length where the parallel-decoding advantage matters. None of the published diffusion LMs have a credible reasoning-mode story.</p>
+
+    <div class="callout warn">
+        <div class="callout-label">The verdict, for now</div>
+        <p>Diffusion text generation is plausible for <strong>small on-device models that produce short, fluent, single-turn answers</strong>. It is unproven for reasoning, tool-use, and agentic loops. Raschka&rsquo;s framing is precisely this: it may replace distilled autoregressive models, not the frontier. That is a genuinely useful niche &mdash; not a paradigm shift.</p>
+    </div>
+</section>
+
+<section class="slide" id="slide-08">
+    <div class="slide-number">08</div>
+    <h2>Companion Decks &mdash; Where to Go Next</h2>
+
+    <ol class="deck-list">
+        <li class="deck-card">
+            <div class="num">01</div>
+            <div class="body">
+                <a class="deck-title" href="https://brendanjameslynskey.github.io/Raschka_Beyond_LLMs_01_Linear_Attention_Hybrids/">Linear-Attention Hybrids &rarr;</a>
+                <div class="desc">MiniMax-M1, Qwen3-Next, DeepSeek V3.2, Kimi Linear. Gated DeltaNet, the 3:1 hybrid pattern, and why MiniMax-M2 reverted. KV-cache calculator widget.</div>
+            </div>
+        </li>
+        <li class="deck-card">
+            <div class="num">03</div>
+            <div class="body">
+                <a class="deck-title" href="https://brendanjameslynskey.github.io/Raschka_Beyond_LLMs_03_Code_World_Models/">Code World Models &rarr;</a>
+                <div class="desc">CWM 32B. Mid-training that makes the model predict program state evolution. SWE-bench parity at 4&times; smaller. Interactive: world-model rollout stepper.</div>
+            </div>
+        </li>
+        <li class="deck-card">
+            <div class="num">04</div>
+            <div class="body">
+                <a class="deck-title" href="https://brendanjameslynskey.github.io/Raschka_Beyond_LLMs_04_Small_Recursive_Transformers/">Small Recursive Transformers &rarr;</a>
+                <div class="desc">HRM, TRM (7M params). Iterative self-loops for ARC-AGI. The surprising attention-not-required ablation. Recursive trace viewer.</div>
+            </div>
+        </li>
+        <li class="deck-card">
+            <div class="num">05</div>
+            <div class="body">
+                <a class="deck-title" href="https://brendanjameslynskey.github.io/Raschka_Beyond_LLMs_05_Decision_Tree/">When to Reach for Non-Transformer &rarr;</a>
+                <div class="desc">A practical decision-tree synthesising all four families. Walk your workload through the tree and see which architecture fits.</div>
+            </div>
+        </li>
+    </ol>
+</section>
+
+<section class="slide" id="slide-09">
+    <div class="slide-number">09</div>
+    <h2>Things to Try Yourself</h2>
+
+    <div class="diagram-grid cols-2">
+        <div class="diagram-panel accent-border">
+            <h4>15 minutes &mdash; play with the visualiser</h4>
+            <p>Watch the order tokens get committed in. Predict, before pressing Run, where the diffusion model will stumble &mdash; positions that depend on later tokens. The widget seeds a fixed sentence so you can see the same trajectory repeatedly.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>1 hour &mdash; run LLaDA-Instruct</h4>
+            <p>The weights are open. Run a prompt that requires &ldquo;New York&rdquo; in a non-obvious place. Compare to a same-size autoregressive model. The error mode you hit (or don&rsquo;t) is the one ParallelBench characterises.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>An afternoon &mdash; vary the step count</h4>
+            <p>LLaDA exposes the denoising step count as a knob. Sweep it from 4 to 256. Plot accuracy and latency. The trade-off curve is non-monotonic in interesting ways &mdash; too few steps causes commitment errors; too many wastes compute and approximates autoregressive cost.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>A weekend &mdash; force it to do tool use</h4>
+            <p>Try to wire LLaDA into an agent loop with a single bounded tool. Document where it breaks. The failure modes are not yet well-understood; even a small empirical study fills a real gap.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Read the source</h4>
+            <p>Start with the <strong>LLaDA paper</strong> for the cleanest exposition. Then <strong>ParallelBench</strong> for the limitations. The Gemini Diffusion blog post is short; the technical detail in it is what they chose <em>not</em> to disclose.</p>
+        </div>
+        <div class="diagram-panel accent-border">
+            <h4>Watch for &mdash;</h4>
+            <p>The next public diffusion-LM release that ships tool-calling, or a reasoning-mode variant, or both. Whichever lab does it first will have made a non-trivial architectural breakthrough. None has, as of this writing.</p>
+        </div>
+    </div>
+
+    <div class="callout">
+        <div class="callout-label">A diagnostic prompt for your team</div>
+        <p>Next time a vendor pitches you on &ldquo;parallel decoding for free&rdquo;, ask them: <em>does your model stream? Does it support tool calls? Does it run in your reasoning mode?</em> If any of those is &ldquo;no&rdquo;, you are looking at an on-device-class deployment, not a frontier replacement &mdash; whether or not the marketing says otherwise.</p>
+    </div>
+</section>
+
+<footer class="footer">
+    <p>Companion to <a href="https://magazine.sebastianraschka.com/p/beyond-standard-llms" target="_blank" rel="noopener">Sebastian Raschka, &ldquo;Beyond Standard LLMs&rdquo;</a></p>
+    <p>Part of the <a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Modern_Architectures">Modern Architectures Series</a></p>
+    <p style="margin-top: 0.5rem; font-size: 0.8rem;"><a href="https://github.com/BrendanJamesLynskey/LLM_Hub_Modern_Architectures">Back to Series Index</a></p>
+</footer>
+
+<script>
+    document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+        anchor.addEventListener('click', function (e) {
+            e.preventDefault();
+            const target = document.querySelector(this.getAttribute('href'));
+            if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+    });
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.style.opacity = '1';
+                entry.target.style.transform = 'translateY(0)';
+            }
+        });
+    }, { threshold: 0.1 });
+    document.querySelectorAll('.slide').forEach(slide => {
+        slide.style.opacity = '0';
+        slide.style.transform = 'translateY(30px)';
+        slide.style.transition = 'opacity 0.6s ease, transform 0.6s ease';
+        observer.observe(slide);
+    });
+
+    // Token visualiser
+    const SENTENCE = ['The','quick','brown','fox','jumps','over','the','lazy','dog','and','then','runs','to','New','York','City','before','breakfast','.'];
+    // diffusion fill order: roughly easy/common positions first, hard positions last.
+    // We use confidence-like ordering: punctuation/common words first, then content words.
+    const DF_ORDER = [18, 0, 6, 9, 1, 12, 8, 4, 5, 7, 11, 16, 17, 2, 3, 10, 15, 13, 14];
+    // tokens per diffusion step (gradually fewer as fewer remain). We commit ~25% per step.
+    const N = SENTENCE.length;
+
+    let arState, dfState, arPasses, dfPasses, dfStep;
+
+    function reset() {
+        arState = new Array(N).fill(null);
+        dfState = new Array(N).fill(null);
+        arPasses = 0;
+        dfPasses = 0;
+        dfStep = 0;
+        render();
+        document.getElementById('vis-status').textContent = 'ready';
+    }
+
+    function render() {
+        const arEl = document.getElementById('ar-tokens');
+        const dfEl = document.getElementById('df-tokens');
+        arEl.innerHTML = '';
+        dfEl.innerHTML = '';
+        for (let i = 0; i < N; i++) {
+            const at = document.createElement('span');
+            at.className = 'vis-tok ' + (arState[i] === null ? 'mask' : 'set');
+            at.textContent = arState[i] === null ? '[M]' : arState[i];
+            arEl.appendChild(at);
+
+            const dt = document.createElement('span');
+            dt.className = 'vis-tok ' + (dfState[i] === null ? 'mask' : 'set');
+            dt.textContent = dfState[i] === null ? '[M]' : dfState[i];
+            dfEl.appendChild(dt);
+        }
+        document.getElementById('ar-passes').textContent = arPasses;
+        document.getElementById('ar-set').textContent    = arState.filter(x => x !== null).length;
+        document.getElementById('df-passes').textContent = dfPasses;
+        document.getElementById('df-set').textContent    = dfState.filter(x => x !== null).length;
+    }
+
+    function step() {
+        let didWork = false;
+        // AR: fill the next masked position from the left.
+        for (let i = 0; i < N; i++) {
+            if (arState[i] === null) {
+                arState[i] = SENTENCE[i];
+                arPasses += 1;
+                didWork = true;
+                break;
+            }
+        }
+        // Diffusion: commit ~25% of remaining positions, in DF_ORDER.
+        const remaining = DF_ORDER.filter(idx => dfState[idx] === null);
+        if (remaining.length > 0) {
+            const k = Math.max(1, Math.ceil(remaining.length * 0.25));
+            for (let j = 0; j < k && j < remaining.length; j++) {
+                dfState[remaining[j]] = SENTENCE[remaining[j]];
+            }
+            dfPasses += 1;
+            dfStep += 1;
+            didWork = true;
+        }
+        render();
+        if (!didWork) document.getElementById('vis-status').textContent = 'done';
+        else document.getElementById('vis-status').textContent = 'step ' + dfStep;
+        return didWork;
+    }
+
+    document.getElementById('vis-step').addEventListener('click', step);
+    document.getElementById('vis-reset').addEventListener('click', reset);
+    document.getElementById('vis-run').addEventListener('click', () => {
+        const t = setInterval(() => {
+            if (!step()) clearInterval(t);
+        }, 350);
+    });
+    reset();
+</script>
+</body>
+</html>
